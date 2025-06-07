@@ -1,0 +1,44 @@
+{
+  "Score": 1000,
+  "Level": 2,
+  "StreakCount": 1,
+  "LastEventDate": "2025-06-07T00:00:00+01:00",
+  "Goals": [
+    {
+      "Type": "SimpleGoal",
+      "Name": "Run a marathon",
+      "Points": 1000,
+      "Completed": true,
+      "TargetCount": null,
+      "CurrentCount": null,
+      "CompletionBonus": null
+    },
+    {
+      "Type": "EternalGoal",
+      "Name": "Read scriptures",
+      "Points": 100,
+      "Completed": false,
+      "TargetCount": null,
+      "CurrentCount": null,
+      "CompletionBonus": null
+    },
+    {
+      "Type": "ChecklistGoal",
+      "Name": "Attend the temple",
+      "Points": 50,
+      "Completed": false,
+      "TargetCount": 10,
+      "CurrentCount": 2,
+      "CompletionBonus": 500
+    },
+    {
+      "Type": "NegativeGoal",
+      "Name": "Skip junk food",
+      "Points": 200,
+      "Completed": true,
+      "TargetCount": null,
+      "CurrentCount": null,
+      "CompletionBonus": null
+    }
+  ]
+}
