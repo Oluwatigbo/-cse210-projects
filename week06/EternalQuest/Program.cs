@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.IO;
+
 
 /*
  * Enhancements to the Eternal Quest Program:
@@ -14,9 +16,10 @@ using System.Text.Json.Serialization;
  * 6. Customizable Goals: Users can personalize their goals with descriptions and categories.
  */
 
+
 namespace EternalQuest
 {
-    // Abstract base class for all types of goals
+    // Base Goal class with polymorphic methods
     public abstract class Goal
     {
         public string Name { get; private set; }
@@ -30,19 +33,14 @@ namespace EternalQuest
             Completed = false;
         }
 
-        // Record an event towards this goal, returning points earned
         public abstract int RecordEvent();
 
-        // Display the goal status as string
         public abstract string DisplayGoal();
     }
 
-    // SimpleGoal: completed once, then done with points awarded
     public class SimpleGoal : Goal
     {
-        public SimpleGoal(string name, int points) : base(name, points)
-        {
-        }
+        public SimpleGoal(string name, int points) : base(name, points) { }
 
         public override int RecordEvent()
         {
@@ -51,7 +49,7 @@ namespace EternalQuest
                 Completed = true;
                 return Points;
             }
-            return 0; // No points if already completed
+            return 0;
         }
 
         public override string DisplayGoal()
@@ -60,16 +58,12 @@ namespace EternalQuest
         }
     }
 
-    // EternalGoal: never completed, points earned every time recorded
     public class EternalGoal : Goal
     {
-        public EternalGoal(string name, int points) : base(name, points)
-        {
-        }
+        public EternalGoal(string name, int points) : base(name, points) { }
 
         public override int RecordEvent()
         {
-            // Points earned every time; goal never marked completed
             return Points;
         }
 
@@ -79,7 +73,6 @@ namespace EternalQuest
         }
     }
 
-    // ChecklistGoal: requires N completions; gains points each time + bonus at completion
     public class ChecklistGoal : Goal
     {
         public int TargetCount { get; private set; }
@@ -95,11 +88,9 @@ namespace EternalQuest
 
         public override int RecordEvent()
         {
-            if (Completed)
-                return 0; // Already completed, no points
+            if (Completed) return 0;
 
             CurrentCount++;
-
             if (CurrentCount >= TargetCount)
             {
                 Completed = true;
@@ -117,21 +108,18 @@ namespace EternalQuest
         }
     }
 
-    // NegativeGoal: loses points for bad habits
     public class NegativeGoal : Goal
     {
-        public NegativeGoal(string name, int points) : base(name, points)
-        {
-        }
+        public NegativeGoal(string name, int points) : base(name, points) { }
 
         public override int RecordEvent()
         {
             if (!Completed)
             {
                 Completed = true;
-                return -Points; // Lose points for this goal
+                return -Points;
             }
-            return 0; // No points if already completed
+            return 0;
         }
 
         public override string DisplayGoal()
@@ -140,90 +128,58 @@ namespace EternalQuest
         }
     }
 
-    // Class to manage user's goals and score
     public class User
     {
-        private List<Goal> goals;
-        public IReadOnlyList<Goal> Goals => goals.AsReadOnly();
+        private List<Goal> _goals;
+        public IReadOnlyList<Goal> Goals => _goals.AsReadOnly();
         public int Score { get; private set; }
-        public int Level { get; private set; }
-        private int streakCount;
-        private DateTime lastEventDate;
 
         public User()
         {
-            goals = new List<Goal>();
+            _goals = new List<Goal>();
             Score = 0;
-            Level = 1;
-            streakCount = 0;
-            lastEventDate = DateTime.MinValue;
         }
 
-        // Add a new goal (any derived type)
         public void AddGoal(Goal goal)
         {
-            if (goal == null)
-                throw new ArgumentNullException(nameof(goal));
-            goals.Add(goal);
+            if (goal == null) throw new ArgumentNullException(nameof(goal));
+            _goals.Add(goal);
         }
 
-        // Record an event on the goal specified by name, returning points earned
         public int RecordEvent(string goalName)
         {
-            Goal goal = goals.Find(g => g.Name == goalName);
-            if (goal == null)
-                throw new ArgumentException($"Goal named '{goalName}' not found.");
+            Goal goal = _goals.Find(g => g.Name.Equals(goalName, StringComparison.OrdinalIgnoreCase));
+            if (goal == null) throw new ArgumentException($"Goal '{goalName}' not found.");
 
             int pointsEarned = goal.RecordEvent();
             Score += pointsEarned;
-
-            // Check for streaks
-            if (lastEventDate.Date == DateTime.Today.AddDays(-1))
-            {
-                streakCount++;
-                if (streakCount % 5 == 0) // Bonus every 5 days
-                {
-                    Score += 100; // Bonus points
-                    Console.WriteLine("Bonus points earned for streak!");
-                }
-            }
-            else if (lastEventDate.Date != DateTime.Today)
-            {
-                streakCount = 1; // Reset streak if not consecutive
-            }
-
-            lastEventDate = DateTime.Today;
-
-            // Level up based on score
-            Level = Score / 1000 + 1; // Level up every 1000 points
             return pointsEarned;
         }
 
-        // Display all goals and their status
         public void DisplayGoals()
         {
-            Console.WriteLine($"Level: {Level}");
-            Console.WriteLine("Goals:");
-            foreach (var goal in goals)
+            Console.WriteLine("Current Goals:");
+            if (_goals.Count == 0)
+            {
+                Console.WriteLine("No goals have been added yet.");
+                return;
+            }
+            foreach (var goal in _goals)
             {
                 Console.WriteLine(goal.DisplayGoal());
             }
             Console.WriteLine($"Total Score: {Score}\n");
         }
 
-        // Save user data to JSON file
         public void SaveData(string filename)
         {
             var userData = new UserData
             {
                 Score = this.Score,
-                Level = this.Level,
-                StreakCount = this.streakCount,
-                LastEventDate = this.lastEventDate,
                 Goals = new List<GoalData>()
             };
 
-            foreach (var goal in goals)
+            foreach (var goal in _goals)
             {
                 if (goal is SimpleGoal)
                 {
@@ -270,69 +226,66 @@ namespace EternalQuest
                 }
             }
 
-            var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(userData, jsonOptions);
-            System.IO.File.WriteAllText(filename, json);
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(userData, options);
+            File.WriteAllText(filename, json);
         }
 
-        // Load user data from JSON file
         public void LoadData(string filename)
         {
-            if (!System.IO.File.Exists(filename))
-                throw new System.IO.FileNotFoundException($"File '{filename}' not found.");
+            if (!File.Exists(filename))
+            {
+                Console.WriteLine($"File '{filename}' not found.");
+                return;
+            }
 
-            string json = System.IO.File.ReadAllText(filename);
+            string json = File.ReadAllText(filename);
             var userData = JsonSerializer.Deserialize<UserData>(json);
 
             if (userData == null)
-                throw new Exception("Failed to deserialize user data.");
+            {
+                Console.WriteLine("Failed to load data.");
+                return;
+            }
 
-            this.Score = userData.Score;
-            this.Level = userData.Level;
-            this.streakCount = userData.StreakCount;
-            this.lastEventDate = userData.LastEventDate;
-            this.goals = new List<Goal>();
+            Score = userData.Score;
+            _goals.Clear();
 
-            foreach (var goalData in userData.Goals)
+            foreach (var g in userData.Goals)
             {
                 Goal goal;
-                switch (goalData.Type)
+                switch (g.Type)
                 {
                     case "SimpleGoal":
-                        var simpleGoal = new SimpleGoal(goalData.Name, goalData.Points);
-                        if (goalData.Completed)
-                            simpleGoal.RecordEvent(); // Mark completed
-                        goal = simpleGoal;
+                        var sg = new SimpleGoal(g.Name, g.Points);
+                        if (g.Completed) sg.RecordEvent();
+                        goal = sg;
                         break;
                     case "EternalGoal":
-                        goal = new EternalGoal(goalData.Name, goalData.Points);
+                        goal = new EternalGoal(g.Name, g.Points);
                         break;
                     case "ChecklistGoal":
-                        var checklistGoal = new ChecklistGoal(goalData.Name, goalData.Points, goalData.TargetCount ?? 0, goalData.CompletionBonus ?? 0);
-                        // Set current count and completed status
-                        for (int i = 0; i < (goalData.CurrentCount ?? 0); i++)
-                            checklistGoal.RecordEvent();
-                        goal = checklistGoal;
+                        var cg = new ChecklistGoal(g.Name, g.Points, g.TargetCount ?? 0, g.CompletionBonus ?? 0);
+                        for (int i = 0; i < (g.CurrentCount ?? 0); i++)
+                            cg.RecordEvent();
+                        goal = cg;
                         break;
                     case "NegativeGoal":
-                        goal = new NegativeGoal(goalData.Name, goalData.Points);
-                        if (goalData.Completed)
-                            goal.RecordEvent(); // Mark completed
+                        var ng = new NegativeGoal(g.Name, g.Points);
+                        if (g.Completed) ng.RecordEvent();
+                        goal = ng;
                         break;
                     default:
-                        throw new Exception($"Unknown goal type: {goalData.Type}");
+                        Console.WriteLine($"Unknown goal type: {g.Type}. Skipping.");
+                        continue;
                 }
-                goals.Add(goal);
+                _goals.Add(goal);
             }
         }
 
-        // Helper classes for JSON serialization
         private class UserData
         {
             public int Score { get; set; }
-            public int Level { get; set; }
-            public int StreakCount { get; set; }
-            public DateTime LastEventDate { get; set; }
             public List<GoalData> Goals { get; set; } = new List<GoalData>();
         }
 
@@ -348,39 +301,156 @@ namespace EternalQuest
         }
     }
 
-    // Example of usage
     class Program
     {
-        static void Main(string[] args)
+        static User user = new User();
+        const string saveFile = "userdata.json";
+
+        static void Main()
         {
-            User user = new User();
+            Console.WriteLine("Welcome to the Eternal Quest Program!");
+            LoadIfExists();
 
-            user.AddGoal(new SimpleGoal("Run a marathon", 1000));
-            user.AddGoal(new EternalGoal("Read scriptures", 100));
-            user.AddGoal(new ChecklistGoal("Attend the temple", 50, 10, 500));
-            user.AddGoal(new NegativeGoal("Skip junk food", 200)); // Negative goal
+            bool exit = false;
+            while (!exit)
+            {
+                Console.WriteLine("Please choose an option:");
+                Console.WriteLine("1. Create new goal");
+                Console.WriteLine("2. Record goal event");
+                Console.WriteLine("3. Show all goals");
+                Console.WriteLine("4. Save goals to file");
+                Console.WriteLine("5. Load goals from file");
+                Console.WriteLine("6. Exit");
+                Console.Write("Your selection: ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
 
-            Console.WriteLine("Initial goals and score:");
-            user.DisplayGoals();
+                switch (choice)
+                {
+                    case "1":
+                        CreateGoal();
+                        break;
+                    case "2":
+                        RecordEvent();
+                        break;
+                    case "3":
+                        user.DisplayGoals();
+                        break;
+                    case "4":
+                        user.SaveData(saveFile);
+                        Console.WriteLine($"Data saved to {saveFile}\n");
+                        break;
+                    case "5":
+                        user.LoadData(saveFile);
+                        Console.WriteLine("Data loaded.\n");
+                        break;
+                    case "6":
+                        exit = true;
+                        break;
+                    default:
+                        Console.WriteLine("Invalid choice. Please try again.\n");
+                        break;
+                }
+            }
+            Console.WriteLine("Thank you for using Eternal Quest. Goodbye!");
+        }
 
-            Console.WriteLine("Recording some goals...");
-            user.RecordEvent("Run a marathon");    // Should complete simple goal
-            user.RecordEvent("Read scriptures");   // Points for eternal goal
-            user.RecordEvent("Attend the temple"); // Checklist progress
-            user.RecordEvent("Attend the temple");
-            user.RecordEvent("Skip junk food");    // Lose points for negative goal
+        static void CreateGoal()
+        {
+            Console.WriteLine("Select goal type:");
+            Console.WriteLine("1. Simple Goal");
+            Console.WriteLine("2. Eternal Goal");
+            Console.WriteLine("3. Checklist Goal");
+            Console.WriteLine("4. Negative Goal");
+            Console.Write("Choice: ");
+            string input = Console.ReadLine();
 
-            user.DisplayGoals();
+            Console.Write("Enter goal name: ");
+            string name = Console.ReadLine();
 
-            // Save and load example
-            string filename = "userdata.json";
-            user.SaveData(filename);
-            Console.WriteLine($"User  data saved to {filename}");
+            int points = ReadInt("Enter points awarded (positive number): ", min: 1);
 
-            User loadedUser = new User();
-            loadedUser.LoadData(filename);
-            Console.WriteLine("Loaded user data:");
-            loadedUser.DisplayGoals();
+            switch (input)
+            {
+                case "1":
+                    user.AddGoal(new SimpleGoal(name, points));
+                    Console.WriteLine("Simple Goal created.\n");
+                    break;
+                case "2":
+                    user.AddGoal(new EternalGoal(name, points));
+                    Console.WriteLine("Eternal Goal created.\n");
+                    break;
+                case "3":
+                    int target = ReadInt("Enter target number of completions (e.g., 10): ", min: 1);
+                    int bonus = ReadInt("Enter completion bonus points: ", min: 0);
+                    user.AddGoal(new ChecklistGoal(name, points, target, bonus));
+                    Console.WriteLine("Checklist Goal created.\n");
+                    break;
+                case "4":
+                    user.AddGoal(new NegativeGoal(name, points));
+                    Console.WriteLine("Negative Goal created.\n");
+                    break;
+                default:
+                    Console.WriteLine("Invalid goal type.\n");
+                    break;
+            }
+        }
+
+        static void RecordEvent()
+        {
+            if (user.Goals.Count == 0)
+            {
+                Console.WriteLine("No goals exist to record events for.\n");
+                return;
+            }
+
+            Console.WriteLine("Available goals:");
+            for (int i = 0; i < user.Goals.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {user.Goals[i].DisplayGoal()}");
+            }
+
+            int choice = ReadInt("Select goal number to record an event: ", 1, user.Goals.Count);
+            var goal = user.Goals[choice - 1];
+
+            try
+            {
+                int points = user.RecordEvent(goal.Name);
+                if (points >= 0)
+                    Console.WriteLine($"Event recorded. You earned {points} points.\n");
+                else
+                    Console.WriteLine($"Event recorded. You lost {Math.Abs(points)} points.\n");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error recording event: {ex.Message}\n");
+            }
+        }
+
+        static int ReadInt(string prompt, int min = int.MinValue, int max = int.MaxValue)
+        {
+            int value;
+            bool valid;
+            do
+            {
+                Console.Write(prompt);
+                string input = Console.ReadLine();
+                valid = int.TryParse(input, out value) && value >= min && value <= max;
+                if (!valid)
+                    Console.WriteLine($"Please enter an integer between {min} and {max}.");
+            } while (!valid);
+            return value;
+        }
+
+        static void LoadIfExists()
+        {
+            if (File.Exists(saveFile))
+            {
+                Console.WriteLine($"Loading saved data from {saveFile}...");
+                user.LoadData(saveFile);
+                Console.WriteLine("Data loaded.\n");
+            }
         }
     }
 }
+
